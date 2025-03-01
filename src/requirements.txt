@@ -1,0 +1,4 @@
+flask
+elasticsearch==7.10.1
+gunicorn
+requests
