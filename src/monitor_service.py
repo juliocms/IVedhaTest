@@ -58,4 +58,4 @@ def monitor_services():
 if __name__ == "__main__":
     while True:
         status, file_created = monitor_services()
-        time.sleep(30)
+        time.sleep(180)

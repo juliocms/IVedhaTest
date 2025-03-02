@@ -1,0 +1,17 @@
+# ./ansible/inventory
+[web]
+httpd_server ansible_connection=docker
+
+[messaging]
+rabbitmq_server ansible_connection=docker
+
+[database]
+postgres_db ansible_connection=docker
+
+[all_rbcapp1:children]
+web
+messaging
+database
+
+[all_rbcapp1:vars]
+ansible_python_interpreter=/usr/bin/python3

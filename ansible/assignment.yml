@@ -1,0 +1,131 @@
+# ---
+# - name: Manage rbcapp1 services and monitoring
+#   hosts: all_rbcapp1
+#   gather_facts: no
+#   vars:
+#     email_recipient: "juliocms@gmail.com"
+#     smtp_server: "smtp.gmail.com"
+
+#   tasks:
+#     - name: Debug task_action variable
+#       ansible.builtin.debug:
+#         var: task_action
+
+#     - name: Check service status for rbcapp1
+#       block:
+#         - name: Check httpd status on httpd_server
+#           ansible.builtin.command: ps -ef | grep httpd | grep -v grep
+#           register: httpd_status
+#           failed_when: false
+#           changed_when: false
+#           when: inventory_hostname == "httpd_server" and task_action == "check-status"
+
+#         - name: Check rabbitmq status on rabbitmq_server
+#           ansible.builtin.command: rabbitmqctl status
+#           register: rabbitmq_status
+#           failed_when: false
+#           changed_when: false
+#           when: inventory_hostname == "rabbitmq_server" and task_action == "check-status"
+
+#         - name: Check postgresql status on postgres_db
+#           ansible.builtin.command: psql -U postgres -c "SELECT 1"
+#           register: postgresql_status
+#           failed_when: false
+#           changed_when: false
+#           when: inventory_hostname == "postgres_db" and task_action == "check-status"
+
+#         - name: Determine rbcapp1 status
+#           ansible.builtin.set_fact:
+#             rbcapp1_status: "{{ 'DOWN' if (httpd_status.rc is defined and httpd_status.rc != 0) or (rabbitmq_status.rc is defined and rabbitmq_status.rc != 0) or (postgresql_status.rc is defined and postgresql_status.rc != 0) else 'UP' }}"
+#             down_services: "{{ [ 'httpd' if httpd_status.rc is defined and httpd_status.rc != 0 else '', 'rabbitmq' if rabbitmq_status.rc is defined and rabbitmq_status.rc != 0 else '', 'postgresql' if postgresql_status.rc is defined and postgresql_status.rc != 0 else '' ] | select | list }}"
+
+#         - name: Push status to REST endpoint
+#           ansible.builtin.uri:
+#             url: "http://monitoring_service:5000/add"
+#             method: POST
+#             body_format: json
+#             body: >
+#               {
+#                 "service_name": "rbcapp1",
+#                 "service_status": "{{ rbcapp1_status }}",
+#                 "host_name": "{{ inventory_hostname }}"
+#               }
+#             status_code: [200, 201]  # Aceita 200 e 201 como sucesso
+#           delegate_to: localhost
+#           when: task_action == "check-status"
+
+#         - name: Display rbcapp1 status and down services
+#           ansible.builtin.debug:
+#             msg: "rbcapp1 status: {{ rbcapp1_status }}, Services: {{ down_services }}"
+#           when: task_action == "check-status"
+
+#       when: task_action == "check-status"
+---
+- name: Manage rbcapp1 services and monitoring
+  hosts: all_rbcapp1
+  gather_facts: no
+  vars:
+    email_recipient: "admin@example.com"
+    smtp_server: "smtp.example.com"
+    rest_endpoint: "http://monitoring_service:5000/healthcheck"
+
+  tasks:
+    - name: Debug task_action variable
+      ansible.builtin.debug:
+        var: task_action
+
+    - name: Check service status for rbcapp1 via REST API
+      block:
+        - name: Get httpd status from REST endpoint
+          ansible.builtin.uri:
+            url: "{{ rest_endpoint }}/httpd"
+            method: GET
+            return_content: yes
+          register: httpd_status_response
+          delegate_to: localhost
+          when: inventory_hostname == "httpd_server" and task_action == "check-status"
+
+        - name: Get rabbitmq status from REST endpoint
+          ansible.builtin.uri:
+            url: "{{ rest_endpoint }}/rabbitmq"
+            method: GET
+            return_content: yes
+          register: rabbitmq_status_response
+          delegate_to: localhost
+          when: inventory_hostname == "rabbitmq_server" and task_action == "check-status"
+
+        - name: Get postgresql status from REST endpoint
+          ansible.builtin.uri:
+            url: "{{ rest_endpoint }}/postgres"
+            method: GET
+            return_content: yes
+          register: postgresql_status_response
+          delegate_to: localhost
+          when: inventory_hostname == "postgres_db" and task_action == "check-status"
+
+        - name: Determine rbcapp1 status
+          ansible.builtin.set_fact:
+            rbcapp1_status: "{{ 'DOWN' if (httpd_status_response.json.status is defined and httpd_status_response.json.status == 'DOWN') or (rabbitmq_status_response.json.status is defined and rabbitmq_status_response.json.status == 'DOWN') or (postgresql_status_response.json.status is defined and postgresql_status_response.json.status == 'DOWN') else 'UP' }}"
+            down_services: "{{ [ 'httpd' if httpd_status_response.json.status is defined and httpd_status_response.json.status == 'DOWN' else '', 'rabbitmq' if rabbitmq_status_response.json.status is defined and rabbitmq_status_response.json.status == 'DOWN' else '', 'postgresql' if postgresql_status_response.json.status is defined and postgresql_status_response.json.status == 'DOWN' else '' ] | select | list }}"
+
+        - name: Push status to REST endpoint
+          ansible.builtin.uri:
+            url: "http://monitoring_service:5000/add"
+            method: POST
+            body_format: json
+            body: >
+              {
+                "service_name": "rbcapp1",
+                "service_status": "{{ rbcapp1_status }}",
+                "host_name": "{{ inventory_hostname }}"
+              }
+            status_code: [200, 201]
+          delegate_to: localhost
+          when: task_action == "check-status"
+
+        - name: Display rbcapp1 status and down services
+          ansible.builtin.debug:
+            msg: "rbcapp1 status: {{ rbcapp1_status }}, Services: {{ down_services }}"
+          when: task_action == "check-status"
+
+      when: task_action == "check-status"
